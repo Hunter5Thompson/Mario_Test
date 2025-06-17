@@ -28,6 +28,15 @@ class Player(pygame.sprite.Sprite):
         except pygame.error as e:
             print(f"Fehler beim Laden des Sprung-Sounds 'sounds/jump.wav': {e}. Spiel wird ohne Sprung-Sound fortgesetzt.")
 
+        # Gameplay related attributes
+        self.lives = 3
+        self.shield_active = False
+        self.shield_end = 0
+        self.fly_active = False
+        self.fly_end = 0
+        self.fire_active = False
+        self.fire_end = 0
+
     def move_left(self):
         self.rect.x -= 10 # Increased movement speed slightly
 
@@ -42,8 +51,24 @@ class Player(pygame.sprite.Sprite):
             self.on_ground = False
 
     def update(self):
-        self.velocity_y += 1  # Gravitation
-        self.rect.y += self.velocity_y
+        current = pygame.time.get_ticks()
+
+        if self.shield_active and current > self.shield_end:
+            self.shield_active = False
+        if self.fly_active and current > self.fly_end:
+            self.fly_active = False
+        if self.fire_active and current > self.fire_end:
+            self.fire_active = False
+
+        if self.fly_active:
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_UP]:
+                self.rect.y -= 5
+            if keys[pygame.K_DOWN]:
+                self.rect.y += 5
+        else:
+            self.velocity_y += 1  # Gravitation
+            self.rect.y += self.velocity_y
 
         # Ground collision (assuming screen height is 600 for now)
         screen_height = 600
@@ -61,3 +86,22 @@ class Player(pygame.sprite.Sprite):
 
     def draw(self, screen):
         screen.blit(self.image, self.rect)
+
+    def activate_powerup(self, kind):
+        now = pygame.time.get_ticks()
+        if kind == "life":
+            self.lives += 1
+        elif kind == "shield":
+            self.shield_active = True
+            self.shield_end = now + 5000
+        elif kind == "fly":
+            self.fly_active = True
+            self.fly_end = now + 5000
+        elif kind == "fire":
+            self.fire_active = True
+            self.fire_end = now + 8000
+
+    def shoot(self):
+        from powerups import Projectile
+        bullet = Projectile(self.rect.right, self.rect.centery)
+        return bullet

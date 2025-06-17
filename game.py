@@ -2,7 +2,8 @@ import pygame
 import sys
 from player import Player
 from obstacles import Obstacle, Enemy
-from highscore import save_highscore # Added import
+from highscore import save_highscore
+from powerups import PowerUp, Projectile, Goal
 
 class Game:
     def __init__(self, screen): # Added screen argument
@@ -14,6 +15,9 @@ class Game:
         self.player = Player()
         self.obstacles = pygame.sprite.Group()
         self.enemies = pygame.sprite.Group()
+        self.powerups = pygame.sprite.Group()
+        self.projectiles = pygame.sprite.Group()
+        self.goal_group = pygame.sprite.GroupSingle()
         self.load_level()
 
         self.score = 0
@@ -36,6 +40,12 @@ class Game:
         except pygame.error as e:
             print(f"Fehler beim Initialisieren des Mixers oder Laden der Hintergrundmusik: {e}")
 
+        # Timers for spawning
+        self.enemy_spawn_event = pygame.USEREVENT + 1
+        self.powerup_spawn_event = pygame.USEREVENT + 2
+        pygame.time.set_timer(self.enemy_spawn_event, 2000)
+        pygame.time.set_timer(self.powerup_spawn_event, 7000)
+
 
     def load_level(self):
         # Simplified level for now
@@ -43,6 +53,8 @@ class Game:
         self.obstacles.add(obstacle)
         enemy = Enemy(600, 500)
         self.enemies.add(enemy)
+        goal = Goal(760, 500)
+        self.goal_group.add(goal)
 
     def run(self):
         while self.running:
@@ -54,7 +66,20 @@ class Game:
     def events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                self.running = False # Game loop will terminate, then method returns
+                self.running = False
+            if event.type == self.enemy_spawn_event:
+                enemy = Enemy(800, 500)
+                self.enemies.add(enemy)
+            if event.type == self.powerup_spawn_event:
+                import random
+                kind = random.choice(["life", "shield", "fly", "fire"])
+                y = random.randint(400, 550)
+                p = PowerUp(800, y, kind)
+                self.powerups.add(p)
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_f and self.player.fire_active:
+                    bullet = self.player.shoot()
+                    self.projectiles.add(bullet)
 
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT]:
@@ -73,6 +98,8 @@ class Game:
         self.player.update()
         self.obstacles.update()
         self.enemies.update()
+        self.powerups.update()
+        self.projectiles.update()
 
         obstacle_hits = pygame.sprite.spritecollide(self.player, self.obstacles, False)
         if obstacle_hits:
@@ -81,13 +108,30 @@ class Game:
                  self.player.rect.right = obstacle_hits[0].rect.left
             elif self.player.rect.x > obstacle_hits[0].rect.x: # hit from right
                  self.player.rect.left = obstacle_hits[0].rect.right
-            self.player.vel_y = 0 # Stop vertical movement from collision if any
+            self.player.velocity_y = 0
 
 
         enemy_hits = pygame.sprite.spritecollide(self.player, self.enemies, False)
         if enemy_hits:
-            save_highscore("Player", self.score) # Save score
-            self.running = False # End game
+            for e in enemy_hits:
+                e.kill()
+            if self.player.shield_active:
+                self.player.shield_active = False
+            else:
+                self.player.lives -= 1
+                if self.player.lives <= 0:
+                    save_highscore("Player", self.score)
+                    self.running = False
+
+        pygame.sprite.groupcollide(self.projectiles, self.enemies, True, True)
+
+        powerup_hits = pygame.sprite.spritecollide(self.player, self.powerups, True)
+        for p in powerup_hits:
+            self.player.activate_powerup(p.kind)
+
+        if pygame.sprite.spritecollide(self.player, self.goal_group, False):
+            save_highscore("Player", self.score)
+            self.running = False
 
     def draw(self):
         if self.background_image:
@@ -97,11 +141,16 @@ class Game:
 
         # Draw score
         score_surface = self.font.render(f"Score: {self.score}", True, self.text_color)
+        lives_surface = self.font.render(f"Lives: {self.player.lives}", True, self.text_color)
         self.screen.blit(score_surface, (10, 10))
+        self.screen.blit(lives_surface, (10, 40))
 
         self.player.draw(self.screen)
         self.obstacles.draw(self.screen)
         self.enemies.draw(self.screen)
+        self.projectiles.draw(self.screen)
+        self.powerups.draw(self.screen)
+        self.goal_group.draw(self.screen)
         pygame.display.flip()
 
 class StartScreen:

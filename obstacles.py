@@ -16,12 +16,16 @@ class Enemy(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
         try:
-            # Attempt to load the sprite
-            self.original_image = pygame.image.load("sprites/enemy02.png").convert_alpha()
+            import random
+            sprite_name = random.choice([
+                "sprites/enemy02.png",
+                "sprites/enemy03.png",
+                "sprites/enemy04.png",
+            ])
+            self.original_image = pygame.image.load(sprite_name).convert_alpha()
             self.image = pygame.transform.scale(self.original_image, (50, 50))
         except pygame.error as e:
-            print(f"Fehler beim Laden des Gegner-Sprites 'sprites/enemy02.png': {e}")
-            # Fallback to a green square if image loading fails
+            print(f"Fehler beim Laden des Gegner-Sprites: {e}")
             self.image = pygame.Surface((50, 50))
             self.image.fill((0, 255, 0))  # Grün
 
