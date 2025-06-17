@@ -2,12 +2,13 @@ import pygame
 import sys
 from player import Player
 from obstacles import Obstacle, Enemy
+from highscore import save_highscore # Added import
 
 class Game:
-    def __init__(self):
-        pygame.init()
-        self.screen = pygame.display.set_mode((800, 600))
-        pygame.display.set_caption("Super Mario Game")
+    def __init__(self, screen): # Added screen argument
+        # pygame.init() # Pygame is initialized in main.py
+        self.screen = screen # Use passed screen
+        pygame.display.set_caption("Super Pixel Jumper - Game") # Updated caption
         self.clock = pygame.time.Clock()
         self.running = True
         self.player = Player()
@@ -15,10 +16,30 @@ class Game:
         self.enemies = pygame.sprite.Group()
         self.load_level()
 
-        # Sound entfernt
+        self.score = 0
+        self.font = pygame.font.SysFont(None, 36)
+        self.start_time = pygame.time.get_ticks()
+        self.text_color = (255, 255, 255) # White for score
+        self.background_image = None # For game background
+        try:
+            img = pygame.image.load("backgrounds/mario.jpg").convert()
+            self.background_image = pygame.transform.scale(img, self.screen.get_size())
+        except pygame.error as e:
+            print(f"Fehler beim Laden des Hintergrundbildes für Game: {e}")
+
+        # Initialize mixer and load background music
+        try:
+            pygame.mixer.init()
+            pygame.mixer.music.load('sounds/background_music.mp3')
+            pygame.mixer.music.set_volume(0.5) # Set volume before playing
+            pygame.mixer.music.play(-1)  # Play in a loop
+        except pygame.error as e:
+            print(f"Fehler beim Initialisieren des Mixers oder Laden der Hintergrundmusik: {e}")
+
 
     def load_level(self):
-        obstacle = Obstacle(400, 500, 50, 50)
+        # Simplified level for now
+        obstacle = Obstacle(400, self.screen.get_height() - self.player.rect.height - 50, 50, 50)
         self.obstacles.add(obstacle)
         enemy = Enemy(600, 500)
         self.enemies.add(enemy)
@@ -33,7 +54,7 @@ class Game:
     def events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                self.running = False
+                self.running = False # Game loop will terminate, then method returns
 
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT]:
@@ -45,52 +66,96 @@ class Game:
             # self.jump_sound.play()  # entfernt
 
     def update(self):
+        # Calculate elapsed time for score
+        elapsed_time = (pygame.time.get_ticks() - self.start_time) // 1000
+        self.score = elapsed_time
+
         self.player.update()
         self.obstacles.update()
         self.enemies.update()
 
         obstacle_hits = pygame.sprite.spritecollide(self.player, self.obstacles, False)
         if obstacle_hits:
-            self.player.rect.x -= 5
+            # More robust collision response might be needed, e.g., stop movement
+            if self.player.rect.x < obstacle_hits[0].rect.x : # hit from left
+                 self.player.rect.right = obstacle_hits[0].rect.left
+            elif self.player.rect.x > obstacle_hits[0].rect.x: # hit from right
+                 self.player.rect.left = obstacle_hits[0].rect.right
+            self.player.vel_y = 0 # Stop vertical movement from collision if any
+
 
         enemy_hits = pygame.sprite.spritecollide(self.player, self.enemies, False)
         if enemy_hits:
-            self.running = False
+            save_highscore("Player", self.score) # Save score
+            self.running = False # End game
 
     def draw(self):
-        self.screen.fill((0, 0, 0))
+        if self.background_image:
+            self.screen.blit(self.background_image, (0, 0))
+        else:
+            self.screen.fill((0, 0, 0)) # Black background for the game - Fallback
+
+        # Draw score
+        score_surface = self.font.render(f"Score: {self.score}", True, self.text_color)
+        self.screen.blit(score_surface, (10, 10))
+
         self.player.draw(self.screen)
         self.obstacles.draw(self.screen)
         self.enemies.draw(self.screen)
         pygame.display.flip()
 
 class StartScreen:
-    def __init__(self):
-        pygame.init()
-        self.screen = pygame.display.set_mode((800, 600))
-        pygame.display.set_caption("Start Screen")
+    def __init__(self, screen): # Added screen argument
+        # pygame.init() # Pygame is initialized in main.py
+        self.screen = screen # Use passed screen
+        pygame.display.set_caption("Super Pixel Jumper - Start")
 
-        self.background = pygame.Surface(self.screen.get_size())
-        self.background.fill((0, 100, 255))  # Blau
+        try:
+            self.background_image = pygame.image.load("backgrounds/mario.jpg")
+            self.background_image = pygame.transform.scale(self.background_image, (800, 600))
+        except pygame.error as e:
+            print(f"Fehler beim Laden des Hintergrundbildes: {e}")
+            self.background_image = None
+            self.background = pygame.Surface(self.screen.get_size())
+            # Create a simple gradient
+            for y in range(600):
+                color_value = int(100 + (155 * y / 600))  # Gradient from blue to lighter blue
+                pygame.draw.line(self.background, (0, color_value, 255), (0, y), (800, y))
+
+
+        self.title_font = pygame.font.SysFont(None, 74)
+        self.title_text = self.title_font.render("Super Pixel Jumper", True, (255, 255, 0)) # Yellow title
+        self.title_text_rect = self.title_text.get_rect(center=(400, 150))
 
         self.font = pygame.font.SysFont(None, 48)
-        self.text = self.font.render("Drücke ENTER zum Starten", True, (255, 255, 255))
-        self.text_rect = self.text.get_rect(center=(400, 300))
+        self.start_text = self.font.render("Drücke ENTER zum Starten", True, (255, 255, 255))
+        self.start_text_rect = self.start_text.get_rect(center=(400, 300))
+
+        self.highscore_font = pygame.font.SysFont(None, 36)
+        self.highscore_text = self.highscore_font.render("Drücke H für Highscores", True, (255, 255, 255))
+        self.highscore_text_rect = self.highscore_text.get_rect(center=(400, 350))
 
     def run(self):
-        running = True
-        while running:
+        # running = True # Loop controlled by events directly
+        while True: # Loop until an action is returned
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    running = False
-                    pygame.quit()
-                    sys.exit()
+                    return "QUIT" # Return action string
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_RETURN:
-                        running = False
+                        return "START_GAME" # Return action string
+                    elif event.key == pygame.K_h:
+                        return "VIEW_HIGHSCORES" # Return action string
 
-            self.screen.blit(self.background, (0, 0))
-            self.screen.blit(self.text, self.text_rect)
+            if self.background_image:
+                self.screen.blit(self.background_image, (0, 0))
+            else:
+                self.screen.blit(self.background, (0, 0))
+
+            self.screen.blit(self.title_text, self.title_text_rect)
+            self.screen.blit(self.start_text, self.start_text_rect)
+            self.screen.blit(self.highscore_text, self.highscore_text_rect)
             pygame.display.flip()
 
-        return Game()
+        # This part should not be reached if logic is correct, loop broken by returns
+        # return Game() # Old way
